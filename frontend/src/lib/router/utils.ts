@@ -21,7 +21,7 @@ export function toAppLocation<S = unknown>(
 
 /**
  * history@4 and history@5 both accept `(path, state)` or a partial-path object,
- * so this dispatch survives the Phase D bump unchanged.
+ * so this dispatch survives the history@5 bump unchanged.
  *
  * `state` is omitted rather than passed as `undefined`, so a stateless
  * `navigate(path)` reaches the history as the bare `push(path)` the call sites
