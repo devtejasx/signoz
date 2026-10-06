@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useHistory } from 'react-router-dom';
-import type { Location, Action } from 'history';
+import { blockNavigation } from 'lib/router/navigation';
+import type {
+	AppLocation,
+	BlockedTransition,
+	NavigationAction,
+} from 'lib/router/types';
 
 interface BlockedNavigationDetails {
-	location: Location;
-	action: Action;
+	location: AppLocation;
+	action: NavigationAction;
 }
 
 interface UseNavigationBlockerResult {
@@ -35,7 +39,7 @@ interface UseNavigationBlockerResult {
  * const handleSave = async () => {
  *   await save();
  *   allowNextNavigation();
- *   history.push('/next');
+ *   navigate('/next');
  * };
  * ```
  *
@@ -44,10 +48,10 @@ interface UseNavigationBlockerResult {
 export function useNavigationBlocker(
 	shouldBlock: boolean,
 ): UseNavigationBlockerResult {
-	const history = useHistory();
 	const [blockedNavigation, setBlockedNavigation] =
 		useState<BlockedNavigationDetails | null>(null);
 	const unblockRef = useRef<(() => void) | null>(null);
+	const retryRef = useRef<(() => void) | null>(null);
 	const bypassNextRef = useRef(false);
 
 	useEffect(() => {
@@ -60,14 +64,29 @@ export function useNavigationBlocker(
 			return;
 		}
 
-		unblockRef.current = history.block((location, action) => {
-			if (bypassNextRef.current) {
-				bypassNextRef.current = false;
-				return undefined;
-			}
-			setBlockedNavigation({ location, action });
-			return false;
-		});
+		// `blockNavigation` cancels every transition while a blocker is registered,
+		// so letting one through means unblocking and calling `retry()` inside the
+		// blocker. The blocker is re-registered afterwards so a single bypass does
+		// not disarm the rest of the session.
+		const register = (): void => {
+			unblockRef.current = blockNavigation((transition: BlockedTransition) => {
+				if (bypassNextRef.current) {
+					bypassNextRef.current = false;
+					unblockRef.current?.();
+					unblockRef.current = null;
+					transition.retry();
+					register();
+					return;
+				}
+				retryRef.current = transition.retry;
+				setBlockedNavigation({
+					location: transition.location,
+					action: transition.action,
+				});
+			});
+		};
+
+		register();
 
 		return (): void => {
 			if (unblockRef.current) {
@@ -76,7 +95,7 @@ export function useNavigationBlocker(
 			}
 			bypassNextRef.current = false;
 		};
-	}, [shouldBlock, history]);
+	}, [shouldBlock]);
 
 	useEffect(() => {
 		if (!shouldBlock) {
@@ -104,23 +123,17 @@ export function useNavigationBlocker(
 			unblockRef.current = null;
 		}
 
-		const { location, action } = blockedNavigation;
 		setBlockedNavigation(null);
 
-		switch (action) {
-			case 'PUSH':
-				history.push(location);
-				break;
-			case 'REPLACE':
-				history.replace(location);
-				break;
-			case 'POP':
-				history.goBack();
-				break;
-		}
-	}, [blockedNavigation, history]);
+		// The transition replays itself, so a blocked REPLACE stays a REPLACE and
+		// a blocked POP still walks the history stack.
+		const retry = retryRef.current;
+		retryRef.current = null;
+		retry?.();
+	}, [blockedNavigation]);
 
 	const cancelNavigation = useCallback((): void => {
+		retryRef.current = null;
 		setBlockedNavigation(null);
 	}, []);
 
