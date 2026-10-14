@@ -118,6 +118,7 @@ function Footer(): JSX.Element {
 		notificationSettings,
 		currentQuery,
 		testAlertRule,
+		handleApiError,
 	]);
 
 	const queryClient = useQueryClient();
@@ -174,6 +175,7 @@ function Footer(): JSX.Element {
 		createAlertRule,
 		safeNavigate,
 		handleApiError,
+		queryClient,
 	]);
 
 	const disableButtons =
@@ -193,7 +195,7 @@ function Footer(): JSX.Element {
 				) : (
 					<Check data-testid="save-alert-rule-check-icon" size={14} />
 				)}
-				Save Alert Rule
+				<span className="translate-safe">Save Alert Rule</span>
 			</Button>
 		);
 		if (alertValidationMessage) {
@@ -226,7 +228,7 @@ function Footer(): JSX.Element {
 				) : (
 					<Send data-testid="test-notification-send-icon" size={14} />
 				)}
-				Test Notification
+				<span className="translate-safe">Test Notification</span>
 			</Button>
 		);
 		if (alertValidationMessage) {
