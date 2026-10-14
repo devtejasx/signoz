@@ -15,6 +15,7 @@ import * as useQueryBuilderHooks from 'hooks/queryBuilder/useQueryBuilder';
 import * as useHandleExplorerTabChangeHooks from 'hooks/useHandleExplorerTabChange';
 import * as appContextHooks from 'providers/App/App';
 import { ErrorModalProvider } from 'providers/ErrorModalProvider';
+import { PreferenceContextProvider } from 'providers/preferences/context/PreferenceContextProvider';
 import * as timezoneHooks from 'providers/Timezone';
 import store from 'store';
 import { LicenseEvent } from 'types/api/licensesV3/getActive';
@@ -149,7 +150,9 @@ function renderExplorer(): void {
 				<Provider store={store}>
 					<TooltipProvider>
 						<ErrorModalProvider>
-							<Explorer />
+							<PreferenceContextProvider>
+								<Explorer />
+							</PreferenceContextProvider>
 						</ErrorModalProvider>
 					</TooltipProvider>
 				</Provider>
