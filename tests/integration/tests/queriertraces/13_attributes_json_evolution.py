@@ -13,6 +13,7 @@ from fixtures.querier import (
     build_aggregation,
     build_group_by_field,
     build_traces_scalar_query,
+    get_all_warnings,
     get_rows,
     index_series_by_label,
     make_query_request,
@@ -410,3 +411,71 @@ def test_traces_attributes_json_list_view(
         assert row["data"]["name"] == name
         # int/float compare equal in Python, so map-sourced float64 and JSON-sourced numbers both match.
         assert row["data"]["attributes"] == attributes, name
+
+
+def test_traces_attributes_json_unknown_key_follows_rollout(
+    signoz: types.SigNoz,
+    create_user_admin: None,  # pylint: disable=unused-argument
+    get_token: Callable[[str, str], str],
+    insert_traces: Callable[[list[Traces]], None],
+    seed_attribute_evolution: Callable[[str, datetime], None],
+) -> None:
+    """A key with no metadata rows resolves through the column-wide evolution row like a reported
+    one: the Map before the rollout, the JSON column after it, both while straddling. The before
+    span writes only the Map and the after span only the JSON column, so each window's rows prove
+    which home was read. The not-found warning still fires."""
+    token = get_token(USER_ADMIN_EMAIL, USER_ADMIN_PASSWORD)
+
+    evolution_time = datetime.now(tz=UTC).replace(second=0, microsecond=0) - timedelta(minutes=30)
+    seed_attribute_evolution("traces", evolution_time)
+
+    before = evolution_time - timedelta(minutes=5)
+    after = evolution_time + timedelta(minutes=5)
+
+    spans = [
+        Traces(
+            timestamp=before,
+            trace_id=TraceIdGenerator.trace_id(),
+            span_id=TraceIdGenerator.span_id(),
+            name="before",
+            attributes={"ad.hoc": "/old"},
+            attribute_write_mode="legacy_only",
+        ),
+        Traces(
+            timestamp=after,
+            trace_id=TraceIdGenerator.trace_id(),
+            span_id=TraceIdGenerator.span_id(),
+            name="after",
+            attributes={"ad.hoc": "/new"},
+            attribute_write_mode="json_only",
+        ),
+    ]
+    for span in spans:
+        span.attribute_keys = []
+        span.tag_attributes = []
+    insert_traces(spans)
+
+    windows = {
+        "before": (before - timedelta(minutes=1), before + timedelta(minutes=1), {"/old": {int(before.timestamp() * 1000): 1}}),
+        "after": (after - timedelta(minutes=1), after + timedelta(minutes=1), {"/new": {int(after.timestamp() * 1000): 1}}),
+        "straddle": (before - timedelta(minutes=1), after + timedelta(minutes=1), {"/old": {int(before.timestamp() * 1000): 1}, "/new": {int(after.timestamp() * 1000): 1}}),
+    }
+    for window, (start, end, expected) in windows.items():
+        response = make_query_request(
+            signoz,
+            token,
+            start_ms=int(start.timestamp() * 1000),
+            end_ms=int(end.timestamp() * 1000),
+            request_type=RequestType.TIME_SERIES,
+            queries=[
+                build_traces_scalar_query(
+                    aggregations=[build_aggregation("count()")],
+                    filter_expression="ad.hoc EXISTS",
+                    group_by=[build_group_by_field("ad.hoc", field_context="attribute")],
+                )
+            ],
+        )
+        assert response.status_code == HTTPStatus.OK, window
+        series = index_series_by_label(response.json()["data"]["data"]["results"][0]["aggregations"][0]["series"], "ad.hoc")
+        assert_grouped_series(series, expected_values_by_group=expected)
+        assert any("not found in metadata" in warning.get("message", "") for warning in get_all_warnings(response.json())), window
