@@ -33,6 +33,7 @@ type traceQueryStatementBuilder struct {
 	aggExprRewriter                qbtypes.AggExprRewriter
 	fl                             flagger.Flagger
 	skipResourceFingerprintEnabled bool
+	maxMemoryUsage                 uint64
 	// traceScope, set only on the per-call copy made by BuildTraceScoped, constrains
 	// queries to spans whose trace_id is in the __trace_scope CTE.
 	traceScope *qbtypes.Statement
@@ -56,10 +57,12 @@ func NewFactory(
 		func(_ context.Context, settings factory.ProviderSettings, cfg statementbuilder.Config) (qbtypes.StatementBuilder[qbtypes.TraceAggregation], error) {
 			storage := tracestelemetryschema.NewStorage()
 			aggExprRewriter := querybuilder.NewAggExprRewriter(settings, nil, storage, fl, telemetrytypes.SignalTraces)
-			return NewTraceQueryStatementBuilder(
+			b := NewTraceQueryStatementBuilder(
 				settings, metadataStore, storage, aggExprRewriter, telemetryStore, fl,
 				cfg.SkipResourceFingerprint.Enabled, cfg.SkipResourceFingerprint.Threshold,
-			), nil
+			)
+			b.maxMemoryUsage = MaxMemoryUsageOrDefault(cfg.TracesMaxMemoryUsage)
+			return b, nil
 		},
 	)
 }
@@ -97,6 +100,7 @@ func NewTraceQueryStatementBuilder(
 		aggExprRewriter:                aggExprRewriter,
 		fl:                             flagger,
 		skipResourceFingerprintEnabled: skipResourceFingerprintEnable,
+		maxMemoryUsage:                 DefaultMaxMemoryUsage,
 	}
 }
 
@@ -544,7 +548,7 @@ func (b *traceQueryStatementBuilder) buildTraceQuery(
 	mainSQL, mainArgs := mainSB.BuildWithFlavor(sqlbuilder.ClickHouse)
 
 	// combine it all together:  WITH … SELECT …
-	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + " SETTINGS distributed_product_mode='allow', max_memory_usage=10000000000"
+	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + SettingsClause(b.maxMemoryUsage)
 	finalArgs := querybuilder.PrependArgs(cteArgs, mainArgs)
 
 	stmt := &qbtypes.Statement{

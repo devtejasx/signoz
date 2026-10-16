@@ -21,6 +21,9 @@ type Config struct {
 	// SearchMaxScanRowsJSONBody is the same budget for body_v2, where each row costs far
 	// more: toString() rebuilds every document and no skip index prunes (0 disables).
 	SearchMaxScanRowsJSONBody int64 `yaml:"search_max_scan_rows_json_body" mapstructure:"search_max_scan_rows_json_body"`
+	// TracesMaxMemoryUsage is the ClickHouse max_memory_usage, in bytes, set on trace
+	// queries (0 keeps the 10 GB default).
+	TracesMaxMemoryUsage uint64 `yaml:"traces_max_memory_usage" mapstructure:"traces_max_memory_usage"`
 }
 
 func NewConfig() Config {
@@ -31,6 +34,7 @@ func NewConfig() Config {
 		},
 		SearchMaxScanRows:         60_000_000,
 		SearchMaxScanRowsJSONBody: 6_000_000,
+		TracesMaxMemoryUsage:      10_000_000_000,
 	}
 }
 

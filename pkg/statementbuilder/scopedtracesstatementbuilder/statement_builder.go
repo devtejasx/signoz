@@ -38,6 +38,7 @@ type scopedTraceStatementBuilder struct {
 	traceStmtBuilder          qbtypes.StatementBuilder[qbtypes.TraceAggregation]
 	resourceFilterStmtBuilder qbtypes.StatementBuilder[qbtypes.TraceAggregation]
 	fl                        flagger.Flagger
+	maxMemoryUsage            uint64
 }
 
 var _ qbtypes.StatementBuilder[qbtypes.TraceAggregation] = (*scopedTraceStatementBuilder)(nil)
@@ -59,7 +60,9 @@ func NewFactory(
 			if err != nil {
 				return nil, err
 			}
-			return NewScopedTraceStatementBuilder(settings, metadataStore, tracestelemetryschema.NewStorage(), scope, traceStmtBuilder, fl), nil
+			b := NewScopedTraceStatementBuilder(settings, metadataStore, tracestelemetryschema.NewStorage(), scope, traceStmtBuilder, fl).(*scopedTraceStatementBuilder)
+			b.maxMemoryUsage = tracesstatementbuilder.MaxMemoryUsageOrDefault(cfg.TracesMaxMemoryUsage)
+			return b, nil
 		},
 	)
 }
@@ -95,6 +98,7 @@ func NewScopedTraceStatementBuilder(
 		traceStmtBuilder:          traceStmtBuilder,
 		resourceFilterStmtBuilder: resourceFilterStmtBuilder,
 		fl:                        fl,
+		maxMemoryUsage:            tracesstatementbuilder.DefaultMaxMemoryUsage,
 	}
 }
 
@@ -271,7 +275,7 @@ func (b *scopedTraceStatementBuilder) buildTraceListQuery(
 		cteArgs = append([][]any{resourceArgs}, cteArgs...)
 	}
 
-	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + " SETTINGS distributed_product_mode='allow', max_memory_usage=10000000000"
+	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + tracesstatementbuilder.SettingsClause(b.maxMemoryUsage)
 	finalArgs := querybuilder.PrependArgs(cteArgs, mainArgs)
 
 	return &qbtypes.Statement{

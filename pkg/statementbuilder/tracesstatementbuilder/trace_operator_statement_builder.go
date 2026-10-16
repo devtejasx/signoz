@@ -25,6 +25,7 @@ type traceOperatorStatementBuilder struct {
 	resourceFilterStmtBuilder qbtypes.StatementBuilder[qbtypes.TraceAggregation]
 	aggExprRewriter           qbtypes.AggExprRewriter
 	fl                        flagger.Flagger
+	maxMemoryUsage            uint64
 }
 
 var _ qbtypes.TraceOperatorStatementBuilder = (*traceOperatorStatementBuilder)(nil)
@@ -47,9 +48,12 @@ func NewOperatorFactory(
 				settings, metadataStore, storage, aggExprRewriter, telemetryStore, fl,
 				cfg.SkipResourceFingerprint.Enabled, cfg.SkipResourceFingerprint.Threshold,
 			)
-			return NewTraceOperatorStatementBuilder(
+			traceStmtBuilder.maxMemoryUsage = MaxMemoryUsageOrDefault(cfg.TracesMaxMemoryUsage)
+			b := NewTraceOperatorStatementBuilder(
 				settings, metadataStore, storage, traceStmtBuilder, aggExprRewriter, fl,
-			), nil
+			)
+			b.maxMemoryUsage = MaxMemoryUsageOrDefault(cfg.TracesMaxMemoryUsage)
+			return b, nil
 		},
 	)
 }
@@ -83,6 +87,7 @@ func NewTraceOperatorStatementBuilder(
 		resourceFilterStmtBuilder: resourceFilterStmtBuilder,
 		aggExprRewriter:           aggExprRewriter,
 		fl:                        flagger,
+		maxMemoryUsage:            DefaultMaxMemoryUsage,
 	}
 }
 

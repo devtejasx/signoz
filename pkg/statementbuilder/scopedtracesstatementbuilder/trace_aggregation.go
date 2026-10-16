@@ -10,6 +10,7 @@ import (
 	"github.com/SigNoz/signoz/pkg/clickhousesql"
 	"github.com/SigNoz/signoz/pkg/errors"
 	"github.com/SigNoz/signoz/pkg/querybuilder"
+	"github.com/SigNoz/signoz/pkg/statementbuilder/tracesstatementbuilder"
 	"github.com/SigNoz/signoz/pkg/telemetryschema/tracestelemetryschema"
 	qbtypes "github.com/SigNoz/signoz/pkg/types/querybuildertypes/querybuildertypesv5"
 	"github.com/SigNoz/signoz/pkg/types/telemetrytypes"
@@ -725,7 +726,7 @@ func (b *scopedTraceStatementBuilder) buildTraceAggregationQuery(
 	}
 
 	mainSQL, mainArgs := sb.BuildWithFlavor(sqlbuilder.ClickHouse)
-	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + " SETTINGS distributed_product_mode='allow', max_memory_usage=10000000000"
+	finalSQL := querybuilder.CombineCTEs(cteFragments) + mainSQL + tracesstatementbuilder.SettingsClause(b.maxMemoryUsage)
 	finalArgs := querybuilder.PrependArgs(cteArgs, mainArgs)
 
 	return &qbtypes.Statement{
