@@ -871,6 +871,11 @@ func (q *querier) executeWithCache(ctx context.Context, orgID valuer.UUID, query
 	// Wait for all queries to complete
 	wg.Wait()
 
+	// The full-window fallback below cannot succeed on a canceled context.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, errors.WrapCanceledf(ctxErr, errors.CodeCanceled, "query canceled")
+	}
+
 	// Check for errors
 	for _, err := range errs {
 		if err != nil {

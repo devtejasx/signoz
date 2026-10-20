@@ -310,3 +310,36 @@ func TestRunQueryErrorCancelsSiblings(t *testing.T) {
 	require.ErrorContains(t, err, "query A failed")
 	assert.True(t, bCanceled.Load(), "query B should be canceled once query A fails")
 }
+
+type fakeBucketCache struct {
+	missing []*qbtypes.TimeRange
+}
+
+func (f *fakeBucketCache) GetMissRanges(context.Context, valuer.UUID, qbtypes.Query, qbtypes.Step) (*qbtypes.Result, []*qbtypes.TimeRange) {
+	return &qbtypes.Result{}, f.missing
+}
+
+func (f *fakeBucketCache) Put(context.Context, valuer.UUID, qbtypes.Query, qbtypes.Step, *qbtypes.Result) {
+}
+
+func TestExecuteWithCacheCanceledSkipsFullWindowFallback(t *testing.T) {
+	var executions atomic.Int32
+	query := &fakeQuery{execute: func(ctx context.Context) (*qbtypes.Result, error) {
+		executions.Add(1)
+		return nil, ctx.Err()
+	}}
+
+	q := &querier{
+		logger:      instrumentationtest.New().Logger(),
+		bucketCache: &fakeBucketCache{missing: []*qbtypes.TimeRange{{From: 0, To: 1000}, {From: 2000, To: 3000}}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := q.executeWithCache(ctx, valuer.GenerateUUID(), query, qbtypes.Step{}, make(chan struct{}, 1))
+	require.Error(t, err)
+	assert.True(t, errors.Ast(err, errors.TypeCanceled))
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Zero(t, executions.Load())
+}
