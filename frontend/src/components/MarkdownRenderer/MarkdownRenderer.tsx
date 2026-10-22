@@ -85,7 +85,8 @@ const interpolateMarkdown = (
 	for (const [key, value] of variableEntries) {
 		const placeholder = `{{${key}}}`;
 		const regex = new RegExp(placeholder, 'g');
-		interpolatedContent = interpolatedContent.replace(regex, value);
+		// a replacer function keeps `$&`, `$$` etc. in values literal
+		interpolatedContent = interpolatedContent.replace(regex, () => value);
 	}
 
 	return interpolatedContent;

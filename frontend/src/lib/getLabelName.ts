@@ -21,7 +21,8 @@ const getLabelName = (
 		let endResult = legends;
 
 		variables.forEach((e, index) => {
-			endResult = endResult.replace(`{{${e}}}`, results[index]);
+			// a replacer function keeps `$&`, `$$` etc. in values literal
+			endResult = endResult.replace(`{{${e}}}`, () => results[index]);
 		});
 
 		return endResult;
