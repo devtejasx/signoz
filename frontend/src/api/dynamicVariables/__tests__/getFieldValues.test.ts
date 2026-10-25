@@ -108,6 +108,23 @@ describe('getFieldValues API', () => {
 		});
 	});
 
+	it('should pass search text unencoded so axios encodes it once', async () => {
+		(axios.get as jest.Mock).mockResolvedValueOnce({
+			status: 200,
+			data: { status: 'success', data: { values: {}, complete: true } },
+		});
+
+		await getFieldValues('traces', 'http.route', '/api/v1 users');
+
+		expect(axios.get).toHaveBeenCalledWith('/fields/values', {
+			params: {
+				signal: 'traces',
+				name: 'http.route',
+				searchText: '/api/v1 users',
+			},
+		});
+	});
+
 	it('should call the API with time range parameters', async () => {
 		// Mock API response
 		(axios.get as jest.Mock).mockResolvedValueOnce({

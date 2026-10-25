@@ -22,11 +22,11 @@ export const getFieldKeys = async (
 	const params: Record<string, string> = {};
 
 	if (signal) {
-		params.signal = encodeURIComponent(signal);
+		params.signal = signal;
 	}
 
 	if (name) {
-		params.name = encodeURIComponent(name);
+		params.name = name;
 	}
 
 	try {

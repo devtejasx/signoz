@@ -30,15 +30,15 @@ export const getFieldValues = async (
 	const params: Record<string, string> = {};
 
 	if (signal) {
-		params.signal = encodeURIComponent(signal);
+		params.signal = signal;
 	}
 
 	if (name) {
-		params.name = encodeURIComponent(name);
+		params.name = name;
 	}
 
 	if (searchText) {
-		params.searchText = encodeURIComponent(searchText);
+		params.searchText = searchText;
 	}
 
 	if (startUnixMilli) {
